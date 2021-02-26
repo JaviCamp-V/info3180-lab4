@@ -6,8 +6,9 @@ This file creates your application.
 """
 import os
 from app import app
-from flask import render_template, request, redirect, url_for, flash, session, abort
+from flask import render_template, request, redirect, url_for, flash, session, abort,send_from_directory
 from werkzeug.utils import secure_filename
+from .form import UploadForm
 
 
 ###
@@ -30,24 +31,47 @@ def about():
 def upload():
     if not session.get('logged_in'):
         abort(401)
-
     # Instantiate your form class
-
+    form=UploadForm()
     # Validate file upload on submit
-    if request.method == 'POST':
-        # Get file data and save to your uploads folder
+    if request.method == 'POST' :
+        if form.validate_on_submit():
+            # Get file data and save to your uploads folder
+            image = form.image.data 
+            filename = secure_filename(image.filename)
+            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            flash('File Saved', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash_errors(form)
+    if request.method == 'GET':
+        return render_template('upload.html',form=form) 
 
-        flash('File Saved', 'success')
-        return redirect(url_for('home'))
 
-    return render_template('upload.html')
+def get_uploaded_images():
+    lst=[]
+    rootdir = os.getcwd()
+    for subdir, dirs, files in os.walk(rootdir + '/uploads/'):
+         for file in files[1:]:
+             lst.append(file)
+    return lst
+    
+@app.route('/files',methods=['GET'])
+def files():
+    if not session.get('logged_in'):
+        abort(401)
+    return render_template('files.html',filenames=get_uploaded_images())
 
+@app.route('/uploads/<filename>')
+def get_image(filename):
+    rootdir = os.getcwd()
+    return send_from_directory(os.path.join(rootdir,app.config['UPLOAD_FOLDER']), filename)
 
 @app.route('/login', methods=['POST', 'GET'])
 def login():
     error = None
     if request.method == 'POST':
-        if request.form['username'] != app.config['USERNAME'] or request.form['password'] != app.config['PASSWORD']:
+        if request.form['username'] != app.config['ADMIN_USERNAME'] or request.form['password'] != app.config['ADMIN_PASSWORD']:
             error = 'Invalid username or password'
         else:
             session['logged_in'] = True
